@@ -2,7 +2,11 @@
 import httpx
 import pandas as pd
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
+import os
+
+API_KEY = os.getenv("ASTER_API_KEY")
+
 
 app = FastAPI(title="Aster Info API", description="Local FastAPI wrapper for Aster DEX market data")
 
@@ -138,21 +142,33 @@ async def get_recent_trades(symbol: str, limit: int = 2):
 
 # -------------------------- 9. get_historical_trades --------------------------
 @app.get("/historical_trades/{symbol}")
-async def get_historical_trades(symbol: str, fromId: Optional[int] = None, limit: Optional[int] = 2):
+async def get_historical_trades(
+    symbol: str,
+    fromId: Optional[int] = None,
+    limit: Optional[int] = 2,
+    x_api_key: Optional[str] = Header(None)
+):
     params = {"symbol": symbol.upper()}
     if fromId is not None:
         params["fromId"] = fromId
     if limit is not None:
         params["limit"] = limit
 
+    headers = {"X-MBX-APIKEY": x_api_key or API_KEY} if (x_api_key or API_KEY) else {}
+
     async with httpx.AsyncClient() as client:
-        r = await client.get(f"{BASE_URL}/fapi/v1/historicalTrades", params=params)
-        r.raise_for_status()
-        df = pd.DataFrame(r.json())
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
-        df = df.rename(columns={"id": "tradeId"})
-        df = df[["tradeId", "price", "qty", "quoteQty", "time", "isBuyerMaker"]]
-        return {"markdown": to_md(df)}
+        try:
+            r = await client.get(f"{BASE_URL}/fapi/v1/historicalTrades", params=params, headers=headers)
+            r.raise_for_status()
+            df = pd.DataFrame(r.json())
+            df["time"] = pd.to_datetime(df["time"], unit="ms")
+            df = df.rename(columns={"id": "tradeId"})
+            df = df[["tradeId", "price", "qty", "quoteQty", "time", "isBuyerMaker"]]
+            return {"markdown": to_md(df)}
+        except httpx.HTTPStatusError as e:
+            return {"error": f"HTTP Error {e.response.status_code}: {e.response.text}"}
+        except Exception as e:
+            return {"error": str(e)}
 
 
 # -------------------------- 10. get_aggregated_trades --------------------------
