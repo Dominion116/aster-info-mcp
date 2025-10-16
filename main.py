@@ -3,6 +3,10 @@ from fastapi import FastAPI, Query
 from typing import Optional
 import httpx
 import pandas as pd
+import os
+from dotenv import load_dotenv
+
+API_KEY = os.getenv("ASTER_API_KEY", "")  # optional key from .env or system
 
 app = FastAPI(title="Aster Info API", description="Local FastAPI for all 13 Aster Info endpoints")
 
@@ -111,10 +115,21 @@ async def get_recent_trades(symbol: str, limit: Optional[int] = 5):
 # ---- 9. Historical Trades ----
 @app.get("/historical_trades/{symbol}")
 async def get_historical_trades(symbol: str, limit: Optional[int] = 5):
+    headers = {"X-MBX-APIKEY": API_KEY} if API_KEY else {}
     async with httpx.AsyncClient() as client:
-        r = await client.get(f"{BASE_URL}/fapi/v1/historicalTrades", params={"symbol": symbol, "limit": limit})
-        df = pd.DataFrame(r.json())
-        return {"markdown": to_md(df)}
+        try:
+            response = await client.get(
+                f"{BASE_URL}/fapi/v1/historicalTrades",
+                params={"symbol": symbol, "limit": limit},
+                headers=headers
+            )
+            response.raise_for_status()
+            df = pd.DataFrame(response.json())
+            return {"markdown": to_md(df)}
+        except httpx.HTTPStatusError as e:
+            return {"error": f"HTTP {e.response.status_code}", "message": e.response.text}
+        except Exception as e:
+            return {"error": "Request failed", "message": str(e)}
 
 
 # ---- 10. Aggregated Trades ----
