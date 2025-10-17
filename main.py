@@ -1,14 +1,18 @@
-# main.py
 import httpx
 import pandas as pd
 from typing import Optional
 from fastapi import FastAPI, Header
 import os
 
+# Optional API key for authenticated endpoints (historical trades)
 API_KEY = os.getenv("ASTER_API_KEY")
 
-
-app = FastAPI(title="Aster Info API", description="Local FastAPI wrapper for Aster DEX market data")
+# Initialize FastAPI app
+app = FastAPI(
+    title="Aster Info API",
+    description="Local FastAPI wrapper for Aster DEX market data",
+    version="1.0.0"
+)
 
 BASE_URL = "https://fapi.asterdex.com"
 
@@ -153,7 +157,6 @@ async def get_historical_trades(
         params["fromId"] = fromId
     if limit is not None:
         params["limit"] = limit
-
     headers = {"X-MBX-APIKEY": x_api_key or API_KEY} if (x_api_key or API_KEY) else {}
 
     async with httpx.AsyncClient() as client:
@@ -230,7 +233,8 @@ async def get_price_index_kline(symbol: str, interval: str = "1h", limit: int = 
         return {"markdown": to_md(df.head(5))}
 
 
-# -------------------------- Run server --------------------------
+# -------------------------- Run Server --------------------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.environ.get("PORT", 8000))  # ✅ Render will inject PORT
+    uvicorn.run(app, host="0.0.0.0", port=port)
